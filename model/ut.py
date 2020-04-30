@@ -202,7 +202,7 @@ class EncoderStack(tf.keras.Model):
         self.ffn_wrapper = LayerWrapper(ffn_layer, hparams['num_units'], hparams['dropout_rate'], is_train)
         self.output_norm = LayerNormalization(hparams['num_units'])
         self.pondering_layer = tf.keras.layers.Dense(1, activation=tf.nn.sigmoid, use_bias=True, bias_initializer=tf.constant_initializer(1.0))
-        self.num_head_layer = tf.keras.layers.Dense(3, activation=tf.nn.sigmoid, use_bias=True, bias_initializer=tf.constant_initializer(1.0))
+        self.num_head_layer = tf.keras.layers.Dense(1, activation=tf.nn.sigmoid, use_bias=True, bias_initializer=tf.constant_initializer(1.0))
     
     def call(self, encoder_inputs, attention_bias, inputs_padding):
         batch_size, length, hidden_size = tf.unstack(tf.shape(encoder_inputs))
@@ -224,10 +224,12 @@ class EncoderStack(tf.keras.Model):
             pondering = self.pondering_layer(state)
             pondering = tf.squeeze(pondering, axis=-1)
             
+            num_head_layer = self.num_head_layer
+            
             num_head_layer = self.num_head_layer(state)
-            num_head_3logit = tf.greater(tf.softmax(pondering), 0.6)
-            num_head_5logit = tf.greater(tf.softmax(pondering), 0.6)
-            num_head_7logit = tf.greater(tf.softmax(pondering), 0.6)
+            num_head_3logit = tf.greater(tf.softmax(num_head_layer), 0.6)
+            num_head_5logit = tf.greater(tf.softmax(num_head_layer), 0.6)
+            num_head_7logit = tf.greater(tf.softmax(num_head_layer), 0.6)
             
             # proceed act step
             update_weights = act(pondering, halt_threshold)
