@@ -202,7 +202,7 @@ class EncoderStack(tf.keras.Model):
         self.ffn_wrapper = LayerWrapper(ffn_layer, hparams['num_units'], hparams['dropout_rate'], is_train)
         self.output_norm = LayerNormalization(hparams['num_units'])
         self.pondering_layer = tf.keras.layers.Dense(1, activation=tf.nn.sigmoid, use_bias=True, bias_initializer=tf.constant_initializer(1.0))
-        
+        self.num_head_layer = tf.keras.layers.Dense(3, activation=tf.nn.sigmoid, use_bias=True, bias_initializer=tf.constant_initializer(1.0))
     
     def call(self, encoder_inputs, attention_bias, inputs_padding):
         batch_size, length, hidden_size = tf.unstack(tf.shape(encoder_inputs))
@@ -224,9 +224,24 @@ class EncoderStack(tf.keras.Model):
             pondering = self.pondering_layer(state)
             pondering = tf.squeeze(pondering, axis=-1)
             
+            num_head_layer = self.num_head_layer(state)
+            num_head_3logit = tf.greater(tf.softmax(pondering), 0.6)
+            num_head_5logit = tf.greater(tf.softmax(pondering), 0.6)
+            num_head_7logit = tf.greater(tf.softmax(pondering), 0.6)
+            
             # proceed act step
             update_weights = act(pondering, halt_threshold)
             
+            if(num_head_3logit):
+                self_attention_layer = SelfAttention(hparams['num_units'], 3, hparams['dropout_rate'], is_train) 
+            elif(num_head_5logit):
+                self_attention_layer = SelfAttention(hparams['num_units'], 5, hparams['dropout_rate'], is_train) 
+            
+            ffn_layer = FeedForwardNetwork(hparams['num_units'], hparams['num_filter_units'], hparams['dropout_rate'], is_train)
+            self.self_attention_wrapper = LayerWrapper(self_attention_layer, hparams['num_units'], hparams['dropout_rate'], is_train)
+            self.ffn_wrapper = LayerWrapper(ffn_layer, hparams['num_units'], hparams['dropout_rate'], is_train)
+            self.output_norm = LayerNormalization(hparams['num_units'])
+        
             state = self.self_attention_wrapper(state, attention_bias)
             state = self.ffn_wrapper(state, inputs_padding)
             
